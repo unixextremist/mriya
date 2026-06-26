@@ -15,12 +15,58 @@ mriya is a scrolling x11 window-manager inspired by niri, i3wm and plan9's rio.
 
 - mriya means dream in ukranian.
 
+# compile
+
+```bash
+cc -o mriya mriya.c -D_POSIX_C_SOURCE=200809L $(pkg-config --cflags --libs x11) -lxkbfile
+```
+
+# deps
+
+- libX11-dev
+- libxkbfile-dev
+
+
+# keybinds
+
+- mod + return/enter = open TERM
+- mod + shift + return/enter = open TERM
+- mod + d = open DMENU
+- mod + shift + q = close focused window
+- mod + shift + e = kill wm
+- mod + shift + r = restart wm
+- mod + h / left = focus left
+- mod + l / right = focus right
+- mod + j = decrease inner gap
+- mod + k = increase inner gap
+- mod + shift + j = reset gaps
+- mod + space = zoom (swap with master)
+- mod + shift + space = toggle floating
+- mod + f = toggle maximize
+- mod + shift + f = toggle fullscreen
+- mod + tab = switch to last workspace
+- mod + up = workspace up
+- mod + down = workspace down
+- mod + 1-9 = switch to workspace 1-9
+- mod + shift + 1-9 = move window to workspace 1-9
+- mod + ctrl + 1-9 = toggle workspace 1-9 visibility
+- mod + ctrl + shift + 1-9 = toggle workspace 1-9 on window
+- mod + lmb (drag) = move window (non functional in scrolling mode)
+- mod + rmb (drag) = resize window (non functional in scrolling mode)
+
+# applications
+
+edit `config.h`:
+
+```c
+#define TERM "st"
+#define DMENU "dmenu_run"
+#define BROWSER "firefox"
+#define FILEMANAGER "pcmanfm"
+```
+
 # what doesnt work
 
 - the window gaps arent even
 - if you switch windows when one is fullscreened the fullscreened window like un-fullscreens idk
 
-# compile
-
-- ```sudo xbps-install -S base-devel libX11-devel libxkbfile-devel```
-- ```cc -o mriya mriya.c -D_POSIX_C_SOURCE=200809L -I/usr/include/X11 -L/usr/lib -lX11 -lxkbfile```
