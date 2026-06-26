@@ -15,3 +15,8 @@ mriya is a scrolling x11 window-manager inspired by niri, i3wm and plan9's rio.
 
 - the window gaps arent even
 - if you switch windows when one is fullscreened the fullscreened window like un-fullscreens idk
+
+# compile
+
+- ```sudo xbps-install -S base-devel libX11-devel libxkbfile-devel```
+- ```cc -o mriya mriya.c -D_POSIX_C_SOURCE=200809L -I/usr/include/X11 -L/usr/lib -lX11 -lxkbfile```
