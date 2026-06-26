@@ -32,6 +32,7 @@ typedef struct Client {
     struct Client *next_stack;
     struct Client *prev_stack;
     int border_width;
+    int orig_border_width;
 } Client;
 
 typedef struct Monitor {
@@ -131,6 +132,8 @@ static void focus(Client *c);
 static void unfocus(Client *c, int setfocus);
 static void focusin(XEvent *e);
 static void focusmon(const char *arg);
+static void ensure_visible(Client *c);
+
 static void focusleft(const char *arg);
 static void focusright(const char *arg);
 static Atom getatomprop(Client *c, Atom prop);
@@ -464,6 +467,7 @@ static void focus(Client *c) {
         if (c->state == STATE_FULLSCREEN || c->state == STATE_MAXIMIZED) XRaiseWindow(dpy, c->window);
         selmon->sel = c;
         XSetWindowBorder(dpy, c->window, col_sel_border);
+        setfocus(c);
         drawbar(selmon);
     } else {
         selmon->sel = NULL;
@@ -525,9 +529,9 @@ static int get_total_strip_width(Monitor *m) {
     for (c = m->clients; c; c = c->next)
         if (ISVISIBLE(c) && c->state != STATE_FLOATING && c->state != STATE_FULLSCREEN) n++;
     if (n == 0) return 0;
-    int col_w = (m->width - 2 * outer_gaps + inner_gaps) / 2;
+    int col_w = (m->width - 2 * outer_gaps - inner_gaps - 4 * BORDER_WIDTH) / 2;
     if (col_w < 200) col_w = 200;
-    return n * col_w + (n - 1) * inner_gaps + 2 * outer_gaps;
+    return n * (col_w + 2 * BORDER_WIDTH) + (n - 1) * inner_gaps + 2 * outer_gaps;
 }
 
 static void arrange(Monitor *m) {
@@ -535,7 +539,7 @@ static void arrange(Monitor *m) {
     int total_width = 0;
     int mon_y = m->y + bh;
     int mon_h = m->height - bh;
-    int col_w = (m->width - 2 * outer_gaps + inner_gaps) / 2;
+    int col_w = (m->width - 2 * outer_gaps - inner_gaps - 4 * BORDER_WIDTH) / 2;
     if (col_w < 200) col_w = 200;
 
     for (c = m->clients; c; c = c->next) {
@@ -544,7 +548,7 @@ static void arrange(Monitor *m) {
             continue;
         }
         if (c->state == STATE_FLOATING) {
-            XMoveResizeWindow(dpy, c->window, c->x, c->y, c->width, c->height);
+            resize(c, c->x, c->y, c->width, c->height, 0);
             XSetWindowBorder(dpy, c->window, c == m->sel ? col_sel_border : col_norm_border);
             XRaiseWindow(dpy, c->window);
             continue;
@@ -555,17 +559,17 @@ static void arrange(Monitor *m) {
             continue;
         }
         if (c->state == STATE_MAXIMIZED) {
-            resize(c, m->x + outer_gaps, mon_y + outer_gaps, m->width - 2 * outer_gaps - 2 * BORDER_WIDTH, mon_h - 2 * outer_gaps, 0);
+            resize(c, m->x + outer_gaps, mon_y + outer_gaps, m->width - 2 * outer_gaps - 2 * BORDER_WIDTH, mon_h - 2 * outer_gaps - 2 * BORDER_WIDTH, 0);
             XRaiseWindow(dpy, c->window);
             continue;
         }
         c->x = m->x + outer_gaps + total_width + m->scroll_x;
         c->y = mon_y + outer_gaps;
         c->width = col_w;
-        c->height = mon_h - 2 * outer_gaps;
+        c->height = mon_h - 2 * outer_gaps - 2 * BORDER_WIDTH;
         resize(c, c->x, c->y, c->width, c->height, 0);
         XSetWindowBorder(dpy, c->window, c == m->sel ? col_sel_border : col_norm_border);
-        total_width += col_w + inner_gaps;
+        total_width += col_w + 2 * BORDER_WIDTH + inner_gaps;
     }
 }
 
@@ -576,12 +580,14 @@ static void tile(Monitor *m) {
 static void monocle(Monitor *m) {
     unsigned int n = 0;
     Client *c;
+    int mon_y = m->y + bh;
+    int mon_h = m->height - bh;
     for (c = m->clients; c; c = c->next)
         if (ISVISIBLE(c)) n++;
     if (n > 0)
         for (c = m->clients; c; c = c->next)
             if (ISVISIBLE(c))
-                resize(c, m->x, m->y, m->width - 2 * BORDER_WIDTH, m->height - 2 * BORDER_WIDTH, 0);
+                resize(c, m->x + outer_gaps, mon_y + outer_gaps, m->width - 2 * outer_gaps - 2 * BORDER_WIDTH, mon_h - 2 * outer_gaps - 2 * BORDER_WIDTH, 0);
 }
 
 static void restack(Monitor *m) {
@@ -609,7 +615,7 @@ static void resize(Client *c, int x, int y, int w, int h, int interact) {
     c->y = wc.y = y;
     c->width = wc.width = w;
     c->height = wc.height = h;
-    wc.border_width = BORDER_WIDTH;
+    wc.border_width = c->border_width;
     XConfigureWindow(dpy, c->window, CWX|CWY|CWWidth|CWHeight|CWBorderWidth, &wc);
     configure(c);
     XSync(dpy, False);
@@ -625,7 +631,7 @@ static void configure(Client *c) {
     ce.y = c->y;
     ce.width = c->width;
     ce.height = c->height;
-    ce.border_width = BORDER_WIDTH;
+    ce.border_width = c->border_width;
     ce.above = None;
     ce.override_redirect = False;
     XSendEvent(dpy, c->window, False, StructureNotifyMask, (XEvent *)&ce);
@@ -690,6 +696,41 @@ static void setgaps(const char *arg) {
     arrange(selmon);
 }
 
+static void ensure_visible(Client *c) {
+    Monitor *m = selmon;
+    Client *cl;
+    int pos = 0, found = 0;
+    int col_w = (m->width - 2 * outer_gaps - inner_gaps - 4 * BORDER_WIDTH) / 2;
+    int win_w;
+
+    if (col_w < 200) col_w = 200;
+    if (!c || c->state == STATE_FLOATING || c->state == STATE_FULLSCREEN || c->state == STATE_MAXIMIZED) return;
+
+    for (cl = m->clients; cl; cl = cl->next) {
+        if (!ISVISIBLE(cl) || cl->state == STATE_FLOATING || cl->state == STATE_FULLSCREEN) continue;
+        if (cl == c) { found = 1; break; }
+        pos += col_w + 2 * BORDER_WIDTH + inner_gaps;
+    }
+    if (!found) return;
+
+    win_w = col_w + 2 * BORDER_WIDTH;
+    int win_left = m->x + outer_gaps + pos + m->scroll_x;
+    int win_right = win_left + win_w;
+    int bound_left = m->x + outer_gaps;
+    int bound_right = m->x + m->width - outer_gaps;
+
+    if (win_left < bound_left)
+        m->scroll_x += bound_left - win_left;
+    else if (win_right > bound_right)
+        m->scroll_x -= win_right - bound_right;
+
+    int total = get_total_strip_width(m);
+    int max_scroll = -(total - m->width);
+    if (max_scroll > 0) max_scroll = 0;
+    if (m->scroll_x > 0) m->scroll_x = 0;
+    if (m->scroll_x < max_scroll) m->scroll_x = max_scroll;
+}
+
 static void focusleft(const char *arg) {
     Client *c;
     if (!selmon->sel) {
@@ -704,7 +745,7 @@ static void focusleft(const char *arg) {
         for (c = selmon->stack; c && !ISVISIBLE(c); c = c->prev_stack);
     if (c) {
         focus(c);
-        selmon->scroll_x = 0;
+        ensure_visible(c);
         restack(selmon);
     }
 }
@@ -723,7 +764,7 @@ static void focusright(const char *arg) {
         for (c = selmon->clients; c && !ISVISIBLE(c); c = c->next);
     if (c) {
         focus(c);
-        selmon->scroll_x = 0;
+        ensure_visible(c);
         restack(selmon);
     }
 }
@@ -752,7 +793,7 @@ static void manage(Window w, XWindowAttributes *wa) {
     grabbuttons(c, 0);
     if (XGetTransientForHint(dpy, w, &trans) && trans != None)
         c->state = STATE_FLOATING;
-    wc.border_width = c->state == STATE_NORMAL ? BORDER_WIDTH : 0;
+    wc.border_width = c->border_width;
     XConfigureWindow(dpy, w, CWBorderWidth, &wc);
     XSetWindowBorder(dpy, w, col_norm_border);
     c->next = selmon->clients;
@@ -821,6 +862,8 @@ static void setfullscreen(Client *c, int fullscreen) {
         c->orig_y = c->y;
         c->orig_width = c->width;
         c->orig_height = c->height;
+        c->orig_border_width = c->border_width;
+        c->border_width = 0;
         resize(c, c->monitor->x, c->monitor->y, c->monitor->width, c->monitor->height, 0);
         XRaiseWindow(dpy, c->window);
     } else if (!fullscreen && c->state == STATE_FULLSCREEN) {
@@ -831,6 +874,7 @@ static void setfullscreen(Client *c, int fullscreen) {
         c->y = c->orig_y;
         c->width = c->orig_width;
         c->height = c->orig_height;
+        c->border_width = c->orig_border_width;
         resize(c, c->x, c->y, c->width, c->height, 0);
     }
 }
@@ -871,10 +915,10 @@ static void togglefloating(const char *arg) {
         c->width = c->orig_width;
         c->height = c->orig_height;
         if (c->width < 100 || c->height < 100) {
-            c->x = selmon->x + selmon->width / 4;
-            c->y = selmon->y + selmon->height / 4;
-            c->width = selmon->width / 2;
-            c->height = selmon->height / 2;
+            c->width = (selmon->width - 2 * outer_gaps - 2 * BORDER_WIDTH) / 2;
+            c->height = (selmon->height - bh - 2 * outer_gaps - 2 * BORDER_WIDTH) / 2;
+            c->x = selmon->x + (selmon->width - c->width - 2 * BORDER_WIDTH) / 2;
+            c->y = selmon->y + bh + (selmon->height - bh - c->height - 2 * BORDER_WIDTH) / 2;
         }
     } else if (c->state == STATE_FLOATING) {
         c->state = STATE_NORMAL;
@@ -884,10 +928,10 @@ static void togglefloating(const char *arg) {
         c->orig_width = c->width;
         c->orig_height = c->height;
         c->state = STATE_FLOATING;
-        c->x = selmon->x + selmon->width / 4;
-        c->y = selmon->y + selmon->height / 4;
-        c->width = selmon->width / 2;
-        c->height = selmon->height / 2;
+        c->width = (selmon->width - 2 * outer_gaps - 2 * BORDER_WIDTH) / 2;
+        c->height = (selmon->height - bh - 2 * outer_gaps - 2 * BORDER_WIDTH) / 2;
+        c->x = selmon->x + (selmon->width - c->width - 2 * BORDER_WIDTH) / 2;
+        c->y = selmon->y + bh + (selmon->height - bh - c->height - 2 * BORDER_WIDTH) / 2;
     }
     restack(selmon);
 }
@@ -1000,12 +1044,12 @@ static void movemouse(const char *arg) {
             lasttime = ev.xmotion.time;
             nx = ocx + (ev.xmotion.x - x);
             ny = ocy + (ev.xmotion.y - y);
-            if (abs(selmon->x - nx) < SNAP) nx = selmon->x;
-            else if (abs((selmon->x + selmon->width) - (nx + c->width + 2 * c->border_width)) < SNAP)
-                nx = selmon->x + selmon->width - c->width - 2 * c->border_width;
-            if (abs(selmon->y - ny) < SNAP) ny = selmon->y;
-            else if (abs((selmon->y + selmon->height) - (ny + c->height + 2 * c->border_width)) < SNAP)
-                ny = selmon->y + selmon->height - c->height - 2 * c->border_width;
+            if (abs(selmon->x + outer_gaps - nx) < SNAP) nx = selmon->x + outer_gaps;
+            else if (abs((selmon->x + selmon->width - outer_gaps) - (nx + c->width + 2 * c->border_width)) < SNAP)
+                nx = selmon->x + selmon->width - outer_gaps - c->width - 2 * c->border_width;
+            if (abs(selmon->y + bh + outer_gaps - ny) < SNAP) ny = selmon->y + bh + outer_gaps;
+            else if (abs((selmon->y + selmon->height - outer_gaps) - (ny + c->height + 2 * c->border_width)) < SNAP)
+                ny = selmon->y + selmon->height - outer_gaps - c->height - 2 * c->border_width;
             resize(c, nx, ny, c->width, c->height, 1);
             break;
         }
@@ -1041,10 +1085,12 @@ static void resizemouse(const char *arg) {
             if (nw < 1) nw = 1;
             nh = ev.xmotion.y - ocy - 2 * c->border_width + 1;
             if (nh < 1) nh = 1;
-            if (c->monitor->x + nw >= selmon->x && c->monitor->x + nw <= selmon->x + selmon->width
-                && c->monitor->y + nh >= selmon->y && c->monitor->y + nh <= selmon->y + selmon->height)
-                if (c->state == STATE_NORMAL && (abs(nw - c->width) > SNAP || abs(nh - c->height) > SNAP))
-                    togglefloating(NULL);
+            if (c->x + nw + 2 * c->border_width > selmon->x + selmon->width - outer_gaps)
+                nw = selmon->x + selmon->width - outer_gaps - c->x - 2 * c->border_width;
+            if (c->y + nh + 2 * c->border_width > selmon->y + selmon->height - outer_gaps)
+                nh = selmon->y + selmon->height - outer_gaps - c->y - 2 * c->border_width;
+            if (c->state == STATE_NORMAL && (abs(nw - c->width) > SNAP || abs(nh - c->height) > SNAP))
+                togglefloating(NULL);
             resize(c, c->x, c->y, nw, nh, 1);
             break;
         }
