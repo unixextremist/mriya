@@ -9,6 +9,12 @@ a scrolling x11 window manager.
 
 mriya is a scrolling x11 window-manager inspired by niri, i3wm and plan9's rio. 
 
+# why use this?
+
+- simple codebase
+- you can actually take screenshots, unlike wayland compositors.
+- i3 is the best wm
+
 # fun fact
 
 - mriya was named after the an225 mriya, the largest aircraft ever that was destroyed during the russo-ukranian war.
