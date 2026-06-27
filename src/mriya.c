@@ -232,6 +232,7 @@ static Key keys[] = {
     { MODKEY|ShiftMask, XK_j, setgaps, "0" },
     { MODKEY, XK_space, zoom, NULL },
     { MODKEY|ShiftMask, XK_space, togglefloating, NULL },
+    { MODKEY, XK_f, togglemaximize, NULL },
     { MODKEY|ShiftMask, XK_f, togglefullscreen, NULL },
     { MODKEY, XK_Tab, view, NULL },
     { MODKEY, XK_Left, focusleft, NULL },
@@ -578,6 +579,11 @@ static void arrange(Monitor *m) {
         XSetWindowBorder(dpy, c->window, c == m->sel ? col_sel_border : col_norm_border);
         total_width += col_w + 2 * BORDER_WIDTH + inner_gaps;
     }
+    int total = get_total_strip_width(m);
+    int max_scroll = -(total - m->width);
+    if (max_scroll > 0) max_scroll = 0;
+    if (m->scroll_x > 0) m->scroll_x = 0;
+    if (m->scroll_x < max_scroll) m->scroll_x = max_scroll;
 }
 
 static void tile(Monitor *m) {
@@ -660,6 +666,8 @@ static void showhide(Client *c) {
 static void scrollleft(const char *arg) {
     if (selmon->sel && selmon->sel->state == STATE_MAXIMIZED)
         togglemaximize(NULL);
+    int total = get_total_strip_width(selmon);
+    if (total <= selmon->width) return;
     selmon->scroll_x += SCROLL_STEP;
     if (selmon->scroll_x > 0) selmon->scroll_x = 0;
     arrange(selmon);
@@ -669,6 +677,7 @@ static void scrollright(const char *arg) {
     if (selmon->sel && selmon->sel->state == STATE_MAXIMIZED)
         togglemaximize(NULL);
     int total = get_total_strip_width(selmon);
+    if (total <= selmon->width) return;
     int max_scroll = -(total - selmon->width);
     if (max_scroll > 0) max_scroll = 0;
     selmon->scroll_x -= SCROLL_STEP;
@@ -920,11 +929,10 @@ static void togglemaximize(const char *arg) {
         c->orig_width = c->width;
         c->orig_height = c->height;
         c->state = STATE_MAXIMIZED;
-        int col_w = (selmon->width - 2 * outer_gaps - inner_gaps - 4 * BORDER_WIDTH) / 2;
-        if (col_w < 200) col_w = 200;
-        c->width = selmon->width - 2 * outer_gaps - 2 * BORDER_WIDTH - col_w - inner_gaps;
+        c->width = selmon->width - 2 * outer_gaps - 2 * BORDER_WIDTH;
     }
     restack(selmon);
+    ensure_visible(c);
 }
 
 static void togglefloating(const char *arg) {
@@ -1143,10 +1151,6 @@ static void movemouse(const char *arg) {
             break;
         }
     } while (ev.type != ButtonRelease);
-    if (c->state == STATE_FLOATING) {
-        c->state = STATE_NORMAL;
-        arrange(selmon);
-    }
     XUngrabPointer(dpy, CurrentTime);
 }
 
@@ -1204,10 +1208,6 @@ static void resizemouse(const char *arg) {
         }
     } while (ev.type != ButtonRelease);
     XWarpPointer(dpy, None, c->window, 0, 0, 0, 0, c->width + c->border_width - 1, c->height + c->border_width - 1);
-    if (c->state == STATE_FLOATING) {
-        c->state = STATE_NORMAL;
-        arrange(selmon);
-    }
     XUngrabPointer(dpy, CurrentTime);
     while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
 }
