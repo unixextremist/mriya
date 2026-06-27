@@ -63,6 +63,7 @@ cc -o mriya mriya.c -D_POSIX_C_SOURCE=200809L $(pkg-config --cflags --libs x11) 
 # extra tips/weird things
 
 - to focus on a window you need to do mod + click, not just clicking on it. (or just use the arrow keys.)
+- bars dont work (why would you use one anyways)
 
 # applications
 
