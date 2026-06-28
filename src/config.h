@@ -17,10 +17,10 @@
 
 /* colors - use x11 names or #rrggbb */
 #define NORM_BG "#222222"
-#define NORM_BORDER "#444444"
+#define NORM_BORDER "##ede5d4"
 #define SEL_BG "#005577"
-#define SEL_BORDER "#005577"
-#define URGENT_COLOR "#ff0000"
+#define SEL_BORDER "#ede5d4"
+#define URGENT_COLOR "#ede5d4"
 
 /* modifier key: mod4mask = super/win, mod1mask = alt */
 #define MODKEY Mod4Mask
@@ -29,7 +29,7 @@
 #define MOUSEMASK (ButtonPressMask|ButtonReleaseMask|PointerMotionMask)
 
 /* default programs */
-#define TERM "st"
+#define TERM "alacritty"
 #define DMENU "dmenu_run"
 #define BROWSER "firefox"
 #define FILEMANAGER "pcmanfm"
@@ -53,7 +53,7 @@ static const char *autostart_cmds[] = {
     "xrdb -merge ~/.Xresources",
     "picom --backend glx &",
     "dunst &",
-    "feh --bg-scale ~/wallpaper.jpg",
+    "sheet --restore",
     "polybar example &",
     "nm-applet &",
     "volumeicon &",
@@ -88,5 +88,7 @@ static const Layout layouts[] = {
 
 /* 1 to attach new windows at the end of the stack, 0 to attach at the beginning */
 #define INSERT_END 1
+
+#define STRIP_ALIGN 0
 
 #endif
