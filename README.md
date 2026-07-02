@@ -5,6 +5,8 @@ a scrolling x11 window manager.
   <img src="assets/2026-07-02-020941_1920x1080_scrot.png" alt="img" width="700">
 </p>
 
+- if u make a cool rice and create a pull request with (like replacing the current image) it ill prob merge it
+
 # what is it?
 
 mriya is a scrolling x11 window-manager inspired by niri, i3wm and plan9's rio. 
@@ -12,8 +14,8 @@ mriya is a scrolling x11 window-manager inspired by niri, i3wm and plan9's rio.
 # why use this?
 
 - simple codebase
-- you can actually take screenshots, unlike wayland compositors.
-- it would make me really happy
+- you can actually reliably take screenshots, unlike wayland compositors.
+- its actually smaller than dwm!?
 
 # fun fact
 
